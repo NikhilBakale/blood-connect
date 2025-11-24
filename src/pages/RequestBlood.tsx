@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import { Droplets, ArrowLeft } from "lucide-react";
 
 const RequestBlood = () => {
@@ -22,7 +23,7 @@ const RequestBlood = () => {
     medicalNotes: "",
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.patientName || !formData.bloodType || !formData.urgency || !formData.contactNumber) {
@@ -34,15 +35,54 @@ const RequestBlood = () => {
       return;
     }
 
-    // Store form data in session storage for the next page
-    sessionStorage.setItem("bloodRequest", JSON.stringify(formData));
-    
-    toast({
-      title: "Request Prepared",
-      description: "Now select hospitals to send your request",
-    });
-    
-    navigate("/hospitals");
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast({
+          title: "Authentication Error",
+          description: "Please log in to continue",
+          variant: "destructive",
+        });
+        navigate("/auth");
+        return;
+      }
+
+      // Create the blood request in the database
+      const { data, error } = await supabase
+        .from("blood_requests")
+        .insert({
+          user_id: user.id,
+          patient_name: formData.patientName,
+          patient_age: formData.age,
+          blood_type: formData.bloodType,
+          urgency: formData.urgency,
+          units_needed: formData.unitsNeeded,
+          contact_number: formData.contactNumber,
+          address: formData.address,
+          medical_notes: formData.medicalNotes,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Store request ID for hospital selection
+      sessionStorage.setItem("currentRequestId", data.id);
+      
+      toast({
+        title: "Request Created",
+        description: "Now select hospitals to send your request",
+      });
+      
+      navigate("/hospitals");
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create request",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -50,11 +90,11 @@ const RequestBlood = () => {
       <div className="container mx-auto px-4 py-8 max-w-3xl">
         <Button 
           variant="ghost" 
-          onClick={() => navigate("/")}
+          onClick={() => navigate("/dashboard")}
           className="mb-6"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Home
+          Back to Dashboard
         </Button>
 
         <Card className="shadow-card">
