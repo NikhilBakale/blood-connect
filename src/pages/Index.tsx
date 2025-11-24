@@ -1,16 +1,56 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Droplets, Heart, Clock, MapPin } from "lucide-react";
+import { Droplets, Heart, Clock, MapPin, LogOut } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { Session } from "@supabase/supabase-js";
 
 const Index = () => {
   const navigate = useNavigate();
+  const [session, setSession] = useState<Session | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setSession(null);
+  };
 
   return (
     <div className="min-h-screen bg-background">
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-hero-gradient text-primary-foreground">
         <div className="container mx-auto px-4 py-20 md:py-32">
+          {session && (
+            <div className="flex justify-end gap-2 mb-4">
+              <Button 
+                variant="outline" 
+                onClick={() => navigate("/dashboard")}
+                className="border-white text-white hover:bg-white/10"
+              >
+                Dashboard
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={handleLogout}
+                className="border-white text-white hover:bg-white/10"
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Logout
+              </Button>
+            </div>
+          )}
           <div className="max-w-3xl mx-auto text-center space-y-6">
             <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full text-sm">
               <Droplets className="h-4 w-4" />
@@ -22,22 +62,42 @@ const Index = () => {
             <p className="text-lg md:text-xl text-primary-foreground/90">
               Connect with nearby hospitals instantly. Submit your blood request and get responses from multiple medical centers in your area.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
-              <Button 
-                size="lg" 
-                onClick={() => navigate("/request")}
-                className="bg-white text-primary hover:bg-white/90 shadow-lg"
-              >
-                Request Blood Now
-              </Button>
-              <Button 
-                size="lg" 
-                variant="outline"
-                className="border-white text-white hover:bg-white/10"
-              >
-                Learn More
-              </Button>
-            </div>
+            {session ? (
+              <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
+                <Button 
+                  size="lg" 
+                  onClick={() => navigate("/request")}
+                  className="bg-white text-primary hover:bg-white/90 shadow-lg"
+                >
+                  Request Blood Now
+                </Button>
+                <Button 
+                  size="lg" 
+                  onClick={() => navigate("/dashboard")}
+                  variant="outline"
+                  className="border-white text-white hover:bg-white/10"
+                >
+                  View Dashboard
+                </Button>
+              </div>
+            ) : (
+              <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
+                <Button 
+                  size="lg" 
+                  onClick={() => navigate("/auth")}
+                  className="bg-white text-primary hover:bg-white/90 shadow-lg"
+                >
+                  Login to Request Blood
+                </Button>
+                <Button 
+                  size="lg" 
+                  variant="outline"
+                  className="border-white text-white hover:bg-white/10"
+                >
+                  Learn More
+                </Button>
+              </div>
+            )}
           </div>
         </div>
         <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-background to-transparent" />
@@ -109,11 +169,11 @@ const Index = () => {
             </p>
             <Button 
               size="lg"
-              onClick={() => navigate("/request")}
+              onClick={() => session ? navigate("/request") : navigate("/auth")}
               className="shadow-lg"
             >
               <Droplets className="mr-2 h-5 w-5" />
-              Start Your Request
+              {session ? "Start Your Request" : "Login to Request"}
             </Button>
           </CardContent>
         </Card>

@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, MapPin, Phone, Building2, CheckCircle2 } from "lucide-react";
 
 interface Hospital {
@@ -59,20 +60,21 @@ const mockHospitals: Hospital[] = [
 const Hospitals = () => {
   const navigate = useNavigate();
   const [selectedHospitals, setSelectedHospitals] = useState<number[]>([]);
-  const [requestData, setRequestData] = useState<any>(null);
+  const [requestId, setRequestId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const storedData = sessionStorage.getItem("bloodRequest");
-    if (!storedData) {
+    const savedRequestId = sessionStorage.getItem("currentRequestId");
+    if (!savedRequestId) {
       toast({
-        title: "No Request Data",
-        description: "Please fill out the blood request form first",
+        title: "No Request Found",
+        description: "Please create a blood request first",
         variant: "destructive",
       });
       navigate("/request");
       return;
     }
-    setRequestData(JSON.parse(storedData));
+    setRequestId(savedRequestId);
   }, [navigate]);
 
   const toggleHospital = (hospitalId: number) => {
@@ -83,7 +85,7 @@ const Hospitals = () => {
     );
   };
 
-  const handleSubmitRequests = () => {
+  const handleSubmitRequests = async () => {
     if (selectedHospitals.length === 0) {
       toast({
         title: "No Hospitals Selected",
@@ -93,22 +95,50 @@ const Hospitals = () => {
       return;
     }
 
-    // Simulate sending requests
-    toast({
-      title: "Requests Sent Successfully!",
-      description: `Your blood request has been sent to ${selectedHospitals.length} hospital(s)`,
-    });
+    if (!requestId) {
+      toast({
+        title: "Error",
+        description: "Request ID not found",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    // Clear session storage
-    sessionStorage.removeItem("bloodRequest");
-    
-    // Navigate to success page after a short delay
-    setTimeout(() => {
+    setLoading(true);
+
+    try {
+      const selectedHospitalData = mockHospitals.filter(h => 
+        selectedHospitals.includes(h.id)
+      );
+
+      const { error } = await supabase
+        .from("blood_requests")
+        .update({ 
+          selected_hospitals: selectedHospitalData as any
+        })
+        .eq("id", requestId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Request Submitted",
+        description: `Your request has been sent to ${selectedHospitals.length} hospital(s)`,
+      });
+
+      sessionStorage.removeItem("currentRequestId");
       navigate("/success");
-    }, 1500);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to submit request",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  if (!requestData) {
+  if (!requestId) {
     return null;
   }
 
@@ -127,8 +157,7 @@ const Hospitals = () => {
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Select Hospitals</h1>
           <p className="text-muted-foreground">
-            Choose one or more hospitals to send your blood request for{" "}
-            <span className="font-semibold text-primary">{requestData.bloodType}</span> blood
+            Choose one or more hospitals to send your blood request
           </p>
         </div>
 
@@ -198,10 +227,10 @@ const Hospitals = () => {
           <Button
             size="lg"
             onClick={handleSubmitRequests}
-            disabled={selectedHospitals.length === 0}
+            disabled={selectedHospitals.length === 0 || loading}
             className="w-full sm:w-auto"
           >
-            Submit Requests to Selected Hospitals
+            {loading ? "Submitting..." : "Submit Requests to Selected Hospitals"}
           </Button>
         </div>
       </div>
